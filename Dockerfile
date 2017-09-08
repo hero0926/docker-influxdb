@@ -1,8 +1,13 @@
 FROM ubuntu
 MAINTAINER Matt Baldwin (baldwin@stackpointcloud.com)
 
+RUN rm -rf /var/lib/apt/lists/*
+RUN apt clean
+RUN apt-get clean
+
+ENV DEVIAN_FRONTEND noninteractive
 RUN \
-  apt-get update && apt-get -y --no-install-recommends install \
+ apt update && apt-get update && apt-get -y --no-install-recommends install \
     ca-certificates \
     software-properties-common \
     python-django-tagging \
@@ -11,7 +16,6 @@ RUN \
     python-ldap \
     python-cairo \
     python-pysqlite2 \
-    python-support \
     python-pip \
     gunicorn \
     supervisor \
@@ -19,28 +23,38 @@ RUN \
     nodejs \
     git \
     curl \
-    openjdk-7-jre \
     build-essential \
     python-dev
 
 
+RUN apt install debian-archive-keyring
+RUN add-apt-repository 'deb http://httpredir.debian.org/debian experimental main'
+RUN add-apt-repository 'deb http://httpredir.debian.org/debian sid main'
+
+RUN apt-get install wget
+
+RUN wget http://launchpadlibrarian.net/109052632/python-support_1.0.15_all.deb
+RUN dpkg -i python-support_1.0.15_all.deb
+
 WORKDIR /opt
 RUN \
   curl -s -o grafana.tar.gz "https://grafanarel.s3.amazonaws.com/builds/grafana-latest.linux-x64.tar.gz" && \
-  curl -s -o influxdb_latest_amd64.deb http://s3.amazonaws.com/influxdb/influxdb_latest_amd64.deb && \
+  curl -s -o influxdb_amd64.deb "https://s3.amazonaws.com/influxdb/influxdb_0.8.8_amd64.deb" && \
   mkdir grafana && \
-  tar -xzf grafana.tar.gz --directory grafana --strip-components=1 && \
-  dpkg -i influxdb_latest_amd64.deb && \
+  tar -xzf grafana.tar.gz --directory grafana --strip-components=1 && rm grafana.tar.gz && \
+  dpkg -i influxdb_amd64.deb && rm influxdb_amd64.deb && \
   echo "influxdb soft nofile unlimited" >> /etc/security/limits.conf && \
-  echo "influxdb hard nofile unlimited" >> /etc/security/limits.conf
+  echo "influxdb hard nofile unlimited" >> /etc/security/limits.conf && \
+  apt-get clean
 
-ADD config.js /opt/grafana/config.js
-ADD nginx.conf /etc/nginx/nginx.conf
-ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-ADD config.toml /opt/influxdb/current/config.toml
+COPY config.js /opt/grafana/config.js
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY config.toml /opt/influxdb/current/config.toml
 
 VOLUME ["/opt/influxdb/shared/data"]
 
 EXPOSE 80 8083 8086 2003
 
 CMD ["supervisord", "-n"]
+
